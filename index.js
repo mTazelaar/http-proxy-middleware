@@ -5,6 +5,7 @@ var handlers       = require('./lib/handlers');
 var contextMatcher = require('./lib/context-matcher');
 var PathRewriter   = require('./lib/path-rewriter');
 var ProxyTable     = require('./lib/proxy-table');
+var logger         = require('./lib/logger').getInstance();
 
 var httpProxyMiddleware = function (context, opts) {
     var isWsUpgradeListened = false;
@@ -13,7 +14,7 @@ var httpProxyMiddleware = function (context, opts) {
 
     // create proxy
     var proxy = httpProxy.createProxyServer(proxyOptions);
-    console.log('[HPM] Proxy created:', config.context, ' -> ', proxyOptions.target);
+    logger.info('[HPM] Proxy created:', config.context, ' -> ', proxyOptions.target);
 
     var pathRewriter = PathRewriter.create(proxyOptions.pathRewrite); // returns undefined when "pathRewrite" is not provided
 
@@ -31,7 +32,7 @@ var httpProxyMiddleware = function (context, opts) {
     // Listen for the `close` event on `proxy`.
     proxy.on('close', function (req, socket, head) {
         // view disconnected websocket connections
-        console.log('[HPM] Client disconnected');
+        logger.info('[HPM] Client disconnected');
     });
 
     // https://github.com/chimurai/http-proxy-middleware/issues/19
@@ -50,11 +51,12 @@ var httpProxyMiddleware = function (context, opts) {
         }
 
         if (contextMatcher.match(config.context, req.url)) {
+            logger.debug('[HPM] Matched request: %s with context: ', req.url, config.context);
+
             // handle option.pathRewrite
             if (pathRewriter) {
                 req.url = pathRewriter(req.url);
             }
-
             if (proxyOptions.proxyTable) {
                 // change option.target when proxyTable present.
                 proxy.web(req, res, ProxyTable.createProxyOptions(req, proxyOptions));
@@ -87,7 +89,7 @@ var httpProxyMiddleware = function (context, opts) {
                 req.url = pathRewriter(req.url);
             }
             proxy.ws(req, socket, head);
-            console.log('[HPM] Upgrading to WebSocket');
+            logger.info('[HPM] Upgrading to WebSocket');
         }
     }
 
@@ -101,7 +103,7 @@ var httpProxyMiddleware = function (context, opts) {
 
     function proxyErrorLogger (err, req, res) {
         var targetUri = proxyOptions.target.host + req.url;
-        console.log('[HPM] Proxy error:', err.code, targetUri);
+        logger.error('[HPM] Proxy error:', err.code, targetUri);
     }
 
 };
